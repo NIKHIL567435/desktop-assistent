@@ -863,143 +863,23 @@ export const DesktopSimulator: React.FC = () => {
 
           {windowState !== "minimized" && (
             <>
-              {/* Window Tabs Selector navigation */}
-              <div className="flex items-center justify-between bg-slate-950 px-4 py-1 border-b border-slate-850 shrink-0 select-none overflow-x-auto">
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => setActiveTab("assistant")}
-                    className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-t-md transition duration-200 tracking-wide font-mono ${
-                      activeTab === "assistant"
-                        ? "bg-[#0a0f1d] border-t-2 border-emerald-500 text-emerald-300 font-semibold"
-                        : "text-slate-400 hover:text-slate-205"
-                    }`}
-                  >
-                    <Mic className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
-                    Terminal
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("tasks")}
-                    className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-t-md transition duration-200 tracking-wide font-mono ${
-                      activeTab === "tasks"
-                        ? "bg-[#0a0f1d] border-t-2 border-emerald-500 text-emerald-300 font-semibold"
-                        : "text-slate-400 hover:text-slate-205"
-                    }`}
-                  >
-                    <CheckCircle className="w-3.5 h-3.5 shrink-0 text-indigo-400" />
-                    Tasks Page
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("reminders")}
-                    className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-t-md transition duration-200 tracking-wide font-mono ${
-                      activeTab === "reminders"
-                        ? "bg-[#0a0f1d] border-t-2 border-emerald-500 text-emerald-300 font-semibold"
-                        : "text-slate-400 hover:text-slate-205"
-                    }`}
-                  >
-                    <Clock className="w-3.5 h-3.5 shrink-0 text-[#a855f7]" />
-                    Reminders
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("calendar")}
-                    className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-t-md transition duration-200 tracking-wide font-mono ${
-                      activeTab === "calendar"
-                        ? "bg-[#0a0f1d] border-t-2 border-emerald-500 text-emerald-300 font-semibold"
-                        : "text-slate-400 hover:text-slate-205"
-                    }`}
-                  >
-                    <Activity className="w-3.5 h-3.5 shrink-0 text-amber-500" />
-                    Calendar Grid
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("code")}
-                    className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-t-md transition duration-200 tracking-wide font-mono ${
-                      activeTab === "code"
-                        ? "bg-[#0a0f1d] border-t-2 border-emerald-500 text-emerald-300 font-semibold"
-                        : "text-slate-400 hover:text-slate-205"
-                    }`}
-                  >
-                    <Terminal className="w-3.5 h-3.5 shrink-0" />
-                    Python Export
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("settings")}
-                    className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-t-md transition duration-200 tracking-wide font-mono ${
-                      activeTab === "settings"
-                        ? "bg-[#0a0f1d] border-t-2 border-emerald-500 text-emerald-300 font-semibold"
-                        : "text-slate-400 hover:text-slate-205"
-                    }`}
-                  >
-                    <Settings className="w-3.5 h-3.5 shrink-0" />
-                    Speech Set
-                  </button>
-                </div>
-
-                {/* V2 OS Application Shortcuts inside Tabs Bar */}
-                <div className="flex items-center gap-2 px-2 text-slate-500">
-                  <button
-                    onClick={() => {
-                      setIsBrowserOpen(!isBrowserOpen);
-                      triggerToast(isBrowserOpen ? "Closed Web Browser Window" : "Opened Web Browser Window");
-                    }}
-                    className={`p-1 rounded cursor-pointer transition ${isBrowserOpen ? "bg-blue-950/50 border border-blue-900/50 text-blue-400" : "hover:bg-slate-900 text-slate-400"}`}
-                    title="Toggle Google Chrome Browser"
-                  >
-                    <Chrome className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsFolderOpen(!isFolderOpen);
-                      triggerToast(isFolderOpen ? "Closed Downloads Folder Window" : "Opened Downloads Folder Window");
-                    }}
-                    className={`p-1 rounded cursor-pointer transition ${isFolderOpen ? "bg-emerald-950/50 border border-emerald-900/50 text-emerald-400" : "hover:bg-slate-900 text-slate-400"}`}
-                    title="Toggle Downloads File Explorer"
-                  >
-                    <Folder className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-
               {/* Main Content Area */}
-              <div className="flex-1 p-4 overflow-hidden bg-[#0a0f1d] relative">
-                {activeTab === "assistant" && (
-                  <VoiceAssistant
-                    settings={settings}
-                    setSettings={setSettings}
-                    onAction={handleAction}
-                    onVoiceCommand={handleProductivityVoiceCommand}
-                    logs={logs}
-                    setLogs={setLogs}
-                    writeSystemLog={writeSystemLog}
-                  />
-                )}
-                {activeTab === "tasks" && (
-                  <TasksPage
-                    tasks={tasks}
-                    setTasks={setTasks}
-                    triggerToast={triggerToast}
-                    writeSystemLog={writeSystemLog}
-                  />
-                )}
-                {activeTab === "reminders" && (
-                  <RemindersPage
-                    reminders={reminders}
-                    setReminders={setReminders}
-                    triggerToast={triggerToast}
-                    writeSystemLog={writeSystemLog}
-                  />
-                )}
-                {activeTab === "calendar" && (
-                  <CalendarPage
-                    events={events}
-                    setEvents={setEvents}
-                    triggerToast={triggerToast}
-                    writeSystemLog={writeSystemLog}
-                  />
-                )}
-                {activeTab === "code" && <CodeExplorer />}
-                {activeTab === "settings" && (
-                  <SettingsPanel settings={settings} setSettings={setSettings} />
-                )}
+              <div className="flex-1 p-5 overflow-hidden bg-[#090d16] relative flex flex-col min-h-0">
+                <VoiceAssistant
+                  settings={settings}
+                  setSettings={setSettings}
+                  onAction={handleAction}
+                  onVoiceCommand={handleProductivityVoiceCommand}
+                  logs={logs}
+                  setLogs={setLogs}
+                  writeSystemLog={writeSystemLog}
+                  tasks={tasks}
+                  setTasks={setTasks}
+                  reminders={reminders}
+                  setReminders={setReminders}
+                  events={events}
+                  setEvents={setEvents}
+                />
 
                 {/* ==============================================
                     V2 OS VISUAL PLUGINS & INTERACTIVE OVERLAYS
