@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Mic, MicOff, Play, Trash2, Send, Database, Sliders, Volume2, ShieldAlert, Cpu } from "lucide-react";
+import { Mic, MicOff, Play, Trash2, Send, Database, Sliders, Volume2, ShieldAlert, Cpu, Sparkles, X, Check } from "lucide-react";
 import { Command, LogEntry, VoiceSettings } from "../types";
 import { AudioVisualizer } from "./AudioVisualizer";
 import { motion, AnimatePresence } from "motion/react";
@@ -54,6 +54,8 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
   const [micStatusText, setMicStatusText] = useState<string>("● STANDBY");
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [micPermissionState, setMicPermissionState] = useState<"prompt" | "granted" | "denied">("prompt");
+  const [showSimulatedMic, setShowSimulatedMic] = useState<boolean>(false);
+  const [simulatedText, setSimulatedText] = useState<string>("");
 
   const recognitionRef = useRef<any | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -95,13 +97,17 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
 
   const startSpeechRecognition = async () => {
     if (!SpeechRecognition) {
-      writeSystemLog("Speech Recognition API not supported in this browser. Please use text query fallback.", "error", "engine");
+      writeSystemLog("Speech Recognition API not supported in this browser sandbox. Activating interactive voice simulator.", "warning", "engine");
+      setMicPermissionState("denied");
+      setShowSimulatedMic(true);
       return;
     }
 
     try {
       // Trigger browser mic permissions prompt
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(err => {
+        throw new Error("blocked");
+      });
       setMicStream(stream);
       setMicPermissionState("granted");
 
@@ -120,6 +126,10 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
       recognition.onerror = (e: any) => {
         console.error("Speech Recognition Error:", e);
         writeSystemLog(`Audio Capture error: ${e.error || "unspecified"}`, "error", "voice-in");
+        if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "permission-denied") {
+          setMicPermissionState("denied");
+          setShowSimulatedMic(true);
+        }
         stopSpeechRecognition();
       };
 
@@ -148,7 +158,8 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
     } catch (err: any) {
       console.error("Could not obtain mic permission:", err);
       setMicPermissionState("denied");
-      writeSystemLog("Microphone hardware blocked or busy inside iframe. Proceeding with text input console.", "warning", "voice-in");
+      setShowSimulatedMic(true);
+      writeSystemLog("Microphone hardware blocked inside iframe. Loading seamless interactive voice control.", "warning", "voice-in");
     }
   };
 
@@ -174,11 +185,15 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
         window.speechSynthesis.cancel();
         setIsSpeaking(false);
       }
+      
+      if (micPermissionState === "denied" || !SpeechRecognition) {
+        setShowSimulatedMic(true);
+        return;
+      }
+      
       startSpeechRecognition();
     }
   };
-
-  // Helper log emitter lifted to props
 
   // Speaks out the voice responses locally in client synthesis
   const speakResponse = (text: string) => {
@@ -289,6 +304,36 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
     speakResponse(resolvedText);
   };
 
+  // Helper routine triggered for interactive speech synthesis simulation
+  const triggerSimulatedSpeech = (text: string) => {
+    if (!text.trim()) return;
+    setShowSimulatedMic(false);
+    
+    // Animate a realistic 1.2 second speech-capture transition
+    setIsListening(true);
+    setMicStatusText("● TRANSCRIBING");
+    writeSystemLog(`Virtual Audio Input Triggering: "${text}"`, "info", "voice-in");
+    
+    // Simulate active capture volume levels to get wave movement
+    let count = 0;
+    let timerId = setInterval(() => {
+      setVolumeLevel(0.35 + Math.random() * 0.45);
+      count++;
+      if (count > 10) {
+        clearInterval(timerId);
+      }
+    }, 100);
+
+    setTimeout(() => {
+      setIsListening(false);
+      setVolumeLevel(0);
+      setMicStatusText("● STANDBY");
+      
+      writeSystemLog(`Offline Decoded Transcribed String: "${text}"`, "input", "voice-in");
+      processEngineCommand(text);
+    }, 1100);
+  };
+
   const handleTextSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!textQuery.trim()) return;
@@ -307,8 +352,8 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
     <div id="voice-assistant" className="grid grid-cols-1 lg:grid-cols-12 gap-5 h-[560px]">
       
       {/* Left Column: Recording Controls, Wave, Cheat Sheet (Col 5) */}
-      <div className="lg:col-span-5 flex flex-col bg-slate-950 border border-slate-800 rounded-lg p-4 overflow-hidden relative">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+      <div className="lg:col-span-5 flex flex-col bg-slate-950 border border-slate-800 rounded-lg p-4 overflow-y-auto scrollbar-thin relative">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4 shrink-0">
           <div className="flex items-center gap-1.5 text-xs font-bold text-slate-200 uppercase tracking-widest font-mono">
             <Cpu className="w-4 h-4 text-emerald-400" />
             V1 Hardware Console
@@ -320,6 +365,89 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
           </div>
         </div>
 
+        {/* Simulated Vocal Overlay */}
+        <AnimatePresence>
+          {showSimulatedMic && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="absolute inset-0 z-20 bg-slate-950/98 backdrop-blur-md p-4 flex flex-col justify-between border border-slate-800 rounded-lg"
+            >
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-emerald-400 animate-pulse" />
+                  <span className="text-[11px] font-bold font-mono tracking-wider text-slate-200 uppercase">
+                    Interactive Voiceless Assist
+                  </span>
+                </div>
+                <button
+                  onClick={() => setShowSimulatedMic(false)}
+                  className="p-1 hover:bg-slate-900 text-slate-500 hover:text-slate-200 rounded transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="flex flex-col items-center justify-center text-center py-4 flex-1">
+                <div className="w-11 h-11 rounded-full bg-emerald-950 border border-emerald-800 flex items-center justify-center mb-3 animate-pulse">
+                  <Mic className="w-5 h-5 text-emerald-400" />
+                </div>
+                <p className="text-[11px] text-slate-300 font-sans leading-relaxed max-w-[240px]">
+                  Speak silently or query your pilot. Type anything or click any preset to emulate speech capture:
+                </p>
+                
+                {/* Instant voice triggers */}
+                <div className="flex flex-wrap gap-1.5 justify-center mt-3 max-h-[140px] overflow-y-auto p-1 border border-slate-900 bg-slate-900/20 rounded">
+                  {PREDEFINED_COMMANDS.slice(0, 8).map(cmd => (
+                    <button
+                      key={cmd.phrase}
+                      onClick={() => {
+                        setSimulatedText(cmd.phrase);
+                        triggerSimulatedSpeech(cmd.phrase);
+                      }}
+                      className="text-[10px] bg-[#0c101a] hover:bg-emerald-950 hover:text-emerald-300 border border-slate-800/80 px-2 py-1 rounded text-slate-400 font-mono transition cursor-pointer"
+                    >
+                      "{cmd.phrase}"
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t border-slate-800 pt-3">
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    placeholder="Enter vocal phrase string..."
+                    value={simulatedText}
+                    onChange={(e) => setSimulatedText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        triggerSimulatedSpeech(simulatedText);
+                        setSimulatedText("");
+                      }
+                    }}
+                    className="flex-1 text-xs bg-slate-900 border border-slate-800 text-slate-200 placeholder-slate-650 px-2.5 py-2 rounded focus:outline-none focus:border-emerald-500 font-mono"
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => {
+                      triggerSimulatedSpeech(simulatedText);
+                      setSimulatedText("");
+                    }}
+                    className="bg-emerald-900 border border-emerald-700 hover:bg-emerald-850 px-3.5 py-1.5 rounded text-emerald-100 font-sans font-bold text-xs transition"
+                  >
+                    Speak
+                  </button>
+                </div>
+                <div className="text-[9px] text-slate-500 text-center mt-2 font-mono">
+                  Translates input buffer directly into PyQt pipeline triggers.
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Waves view */}
         <AudioVisualizer 
           isActive={isListening} 
@@ -329,7 +457,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
         />
 
         {/* PTT Circular Buttons */}
-        <div className="flex-1 flex flex-col items-center justify-center py-6 gap-3">
+        <div className="flex-1 flex flex-col items-center justify-center py-4 gap-3">
           <div className="relative">
             {/* Pulsing visual halo boundary */}
             <AnimatePresence>
@@ -382,12 +510,12 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
         </div>
 
         {/* Commands cheat sheet */}
-        <div className="mt-auto bg-slate-900/40 border border-slate-800/80 rounded p-3">
+        <div className="mt-auto bg-slate-900/40 border border-[#161c2c] rounded p-3 shrink-0">
           <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 flex items-center gap-1 font-mono mb-2">
             <Sliders className="w-3.5 h-3.5 text-emerald-400" />
             Local Speech Cheat Sheet
           </span>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1.5 max-h-[140px] overflow-y-auto pr-0.5">
             {PREDEFINED_COMMANDS.map(cmd => (
               <button
                 key={cmd.id}
@@ -395,7 +523,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
                   writeSystemLog(`Emulated Command: Clicked "${cmd.phrase}"`, "input", "system");
                   processEngineCommand(cmd.phrase);
                 }}
-                className="text-[10px] font-mono font-medium px-2 py-1 rounded bg-[#0f1420] border border-slate-800 text-slate-300 hover:bg-slate-800 hover:border-slate-600 hover:text-emerald-300 cursor-pointer transition"
+                className="text-[10px] font-mono font-medium px-2 py-1 rounded bg-[#0f1420] border border-slate-800/80 text-slate-300 hover:bg-slate-800 hover:border-slate-600 hover:text-emerald-300 cursor-pointer transition whitespace-nowrap"
               >
                 {cmd.phrase}
               </button>
@@ -469,7 +597,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
             placeholder="Type terminal command query..."
             value={textQuery}
             onChange={(e) => setTextQuery(e.target.value)}
-            className="flex-1 bg-[#090d16] border border-slate-800 rounded px-3 py-2 text-xs font-mono text-slate-300 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+            className="flex-1 bg-[#090d16] border border-slate-800 rounded px-3 py-2 text-xs font-mono text-slate-300 placeholder-slate-650 focus:outline-none focus:border-emerald-500"
           />
           <button
             type="submit"

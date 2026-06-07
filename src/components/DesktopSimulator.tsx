@@ -805,24 +805,20 @@ export const DesktopSimulator: React.FC = () => {
   }
 
   return (
-    <div className="w-full max-w-6xl mx-auto flex flex-col h-full bg-[#030712] rounded-xl shadow-2xl border border-slate-850 overflow-hidden select-none relative">
+    <div className="w-full max-w-6xl mx-auto flex flex-col h-full bg-[#030712] rounded-xl shadow-2xl border border-slate-850 overflow-hidden select-none relative animate-fade-in">
       {/* OS Sim Top header */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-slate-950 border-b border-slate-850 text-slate-400 text-xs font-mono shrink-0">
+      <div className="flex items-center justify-between px-4 py-2 bg-slate-950 border-b border-slate-900 text-slate-400 text-xs font-mono shrink-0">
         <div className="flex items-center gap-2">
-          <Terminal className="w-4 h-4 text-emerald-500" />
-          <span className="font-bold text-slate-200 uppercase tracking-widest text-[9px] sm:text-[10px]">
-            VoicePilot OS Simulation Workspace (V3: System Monitoring)
+          <Terminal className="w-4 h-4 text-emerald-400" />
+          <span className="font-bold text-slate-200 uppercase tracking-widest text-[10px]">
+            VoicePilot Desktop
           </span>
         </div>
 
-        <div className="flex items-center gap-4 text-[10px] sm:text-[11px] font-medium text-slate-500">
-          <span className="hidden sm:flex items-center gap-1">
-            <HardDrive className="w-3.5 h-3.5 text-slate-600" />
-            V2 Offline Local SQLite Active
-          </span>
-          <span className="flex items-center gap-1 border-s border-slate-850 ps-4">
+        <div className="flex items-center gap-4 text-[11px] font-medium text-slate-500">
+          <span className="flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5 text-slate-600" />
-            Clock: <strong className="text-slate-350">{systemTime}</strong>
+            <strong className="text-slate-300 font-mono">{systemTime}</strong>
           </span>
         </div>
       </div>
@@ -836,7 +832,7 @@ export const DesktopSimulator: React.FC = () => {
         }`}>
           
           {/* Window Titlebar */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-850 shrink-0">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-850 shrink-0 bg-slate-950/40">
             {/* Window control circles */}
             <div className="flex items-center gap-2">
               <button
@@ -854,12 +850,12 @@ export const DesktopSimulator: React.FC = () => {
 
             <div className="flex items-center gap-1.5 text-[11px] font-bold font-mono tracking-wide text-slate-400">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              voicepilot_v2_core.exe
+              voicepilot_core.exe
             </div>
 
             <div className="w-12 text-right">
               {/* Quick status shortcut */}
-              <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono">
+              <span className="text-[10px] bg-slate-900 border border-slate-850 text-slate-400 px-2 py-0.5 rounded font-mono">
                 VOL: {isMuted ? "MUTE" : `${volume}%`}
               </span>
             </div>
@@ -867,97 +863,6 @@ export const DesktopSimulator: React.FC = () => {
 
           {windowState !== "minimized" && (
             <>
-              {/* V3 Telemetry Dashboard strip */}
-              <div className="grid grid-cols-2 md:grid-cols-4 border-b border-slate-850 bg-slate-950/30 p-2 sm:p-3 gap-2 sm:gap-3 shrink-0 select-none">
-                {/* CPU card */}
-                <div className={`flex items-center gap-2.5 p-2 rounded-lg bg-[#0e1424]/40 border transition-all duration-300 ${
-                  highlightedStat === "cpu" 
-                    ? "border-cyan-500 bg-cyan-950/10 shadow-[0_0_12px_rgba(6,182,212,0.15)] scale-[1.02]" 
-                    : "border-slate-800/80 hover:border-slate-700"
-                }`}>
-                  <div className={`p-1.5 rounded bg-slate-950 border border-slate-800 text-cyan-400 ${
-                    highlightedStat === "cpu" ? "animate-spin-slow text-cyan-300" : ""
-                  }`}>
-                    <Cpu className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-center text-[9px] font-mono tracking-wider text-slate-500 font-bold uppercase">
-                      <span>CPU LOAD</span>
-                      <span className="text-cyan-400 font-bold">{cpuLoad}%</span>
-                    </div>
-                    <div className="w-full bg-slate-950 rounded-full h-1 mt-1 overflow-hidden border border-slate-900">
-                      <div className="bg-cyan-500 h-full transition-all duration-300" style={{ width: `${cpuLoad}%` }} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* RAM card */}
-                <div className={`flex items-center gap-2.5 p-2 rounded-lg bg-[#0e1424]/40 border transition-all duration-300 ${
-                  highlightedStat === "ram" 
-                    ? "border-indigo-500 bg-indigo-950/10 shadow-[0_0_12px_rgba(99,102,241,0.15)] scale-[1.02]" 
-                    : "border-slate-800/80 hover:border-slate-700"
-                }`}>
-                  <div className={`p-1.5 rounded bg-slate-950 border border-slate-800 text-indigo-400 ${
-                    highlightedStat === "ram" ? "animate-pulse" : ""
-                  }`}>
-                    <Activity className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-center text-[9px] font-mono tracking-wider text-slate-500 font-bold uppercase">
-                      <span>RAM ALLOC</span>
-                      <span className="text-indigo-400 font-bold">{ramLoad}%</span>
-                    </div>
-                    <div className="w-full bg-slate-950 rounded-full h-1 mt-1 overflow-hidden border border-slate-900">
-                      <div className="bg-indigo-500 h-full transition-all duration-300" style={{ width: `${ramLoad}%` }} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Battery card */}
-                <div className={`flex items-center gap-2.5 p-2 rounded-lg bg-[#0e1424]/40 border transition-all duration-300 ${
-                  highlightedStat === "battery" 
-                    ? "border-emerald-500 bg-emerald-950/10 shadow-[0_0_12px_rgba(16,185,129,0.15)] scale-[1.02]" 
-                    : "border-slate-800/80 hover:border-slate-700"
-                }`}>
-                  <div className={`p-1.5 rounded bg-slate-950 border border-slate-800 text-emerald-400 ${
-                    highlightedStat === "battery" ? "animate-bounce" : ""
-                  }`}>
-                    <Battery className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-center text-[9px] font-mono tracking-wider text-slate-500 font-bold uppercase">
-                      <span>BATTERY STATUS</span>
-                      <span className="text-emerald-400 font-bold">{batteryLevel}%</span>
-                    </div>
-                    <div className="w-full bg-slate-950 rounded-full h-1 mt-1 overflow-hidden border border-slate-900">
-                      <div className="bg-emerald-500 h-full transition-all duration-300" style={{ width: `${batteryLevel}%` }} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Disk Space card */}
-                <div className={`flex items-center gap-2.5 p-2 rounded-lg bg-[#0e1424]/40 border transition-all duration-300 ${
-                  highlightedStat === "disk" 
-                    ? "border-amber-500 bg-amber-950/10 shadow-[0_0_12px_rgba(245,158,11,0.15)] scale-[1.02]" 
-                    : "border-slate-800/80 hover:border-slate-700"
-                }`}>
-                  <div className={`p-1.5 rounded bg-slate-950 border border-slate-800 text-amber-400 ${
-                    highlightedStat === "disk" ? "animate-pulse" : ""
-                  }`}>
-                    <HardDrive className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-center text-[9px] font-mono tracking-wider text-slate-500 font-bold uppercase">
-                      <span>DISK SPACE</span>
-                      <span className="text-amber-400 font-bold">{diskCapacity}%</span>
-                    </div>
-                    <div className="w-full bg-slate-950 rounded-full h-1 mt-1 overflow-hidden border border-slate-900">
-                      <div className="bg-amber-500 h-full transition-all duration-300" style={{ width: `${diskCapacity}%` }} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               {/* Window Tabs Selector navigation */}
               <div className="flex items-center justify-between bg-slate-950 px-4 py-1 border-b border-slate-850 shrink-0 select-none overflow-x-auto">
                 <div className="flex items-center gap-1.5">
