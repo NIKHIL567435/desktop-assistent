@@ -1,0 +1,10 @@
+{
+  "name": "VoicePilot Desktop Assistant",
+  "description": "An offline-first voice desktop assistant simulator featuring push-to-talk speech recognition, local speech synthesis, command history, and a settings panel.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
