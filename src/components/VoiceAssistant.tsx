@@ -8,6 +8,14 @@ interface VoiceAssistantProps {
   settings: VoiceSettings;
   setSettings: React.Dispatch<React.SetStateAction<VoiceSettings>>;
   onAction?: (actionType: Command["actionType"]) => string | void;
+  onVoiceCommand?: (query: string) => string | null;
+  logs: LogEntry[];
+  setLogs: React.Dispatch<React.SetStateAction<LogEntry[]>>;
+  writeSystemLog: (
+    message: string,
+    type: "info" | "success" | "warning" | "error" | "input" | "output",
+    source: "system" | "voice-in" | "voice-out" | "engine" | "automation"
+  ) => void;
 }
 
 const PREDEFINED_COMMANDS: Command[] = [
@@ -33,8 +41,11 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
   settings,
   setSettings,
   onAction,
+  onVoiceCommand,
+  logs,
+  setLogs,
+  writeSystemLog,
 }) => {
-  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isListening, setIsListening] = useState<boolean>(false);
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [volumeLevel, setVolumeLevel] = useState<number>(0);
@@ -167,22 +178,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
     }
   };
 
-  // Helper log emitter
-  const writeSystemLog = (
-    message: string,
-    type: "info" | "success" | "warning" | "error" | "input" | "output",
-    source: "system" | "voice-in" | "voice-out" | "engine" | "automation"
-  ) => {
-    const timestamp = new Date().toLocaleTimeString();
-    const newEntry: LogEntry = {
-      id: Math.random().toString(),
-      timestamp,
-      type,
-      source,
-      message,
-    };
-    setLogs(prev => [...prev, newEntry]);
-  };
+  // Helper log emitter lifted to props
 
   // Speaks out the voice responses locally in client synthesis
   const speakResponse = (text: string) => {
@@ -224,6 +220,17 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
     
     // SQLite query logging mock
     writeSystemLog("Running SQLite script: 'INSERT INTO command_history (transcript) VALUES (...)'", "info", "system");
+
+    // Dynamic Productivity voice intercept
+    if (onVoiceCommand) {
+      const response = onVoiceCommand(query);
+      if (response) {
+        writeSystemLog(`Matched Productivity Pattern: "${cleaned}"`, "success", "engine");
+        writeSystemLog(`[Replying] ${response}`, "output", "voice-out");
+        speakResponse(response);
+        return;
+      }
+    }
 
     // Exact matching logic
     const matched = PREDEFINED_COMMANDS.find(cmd => cleaned === cmd.phrase);

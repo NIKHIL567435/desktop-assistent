@@ -33,3 +33,35 @@ export interface SourceFile {
   language: string;
   description: string;
 }
+
+export interface Task {
+  id: number;
+  title: string;
+  description: string;
+  priority: "low" | "medium" | "high" | "urgent";
+  status: "pending" | "completed" | "overdue";
+  created_at: string;
+  due_date: string;
+  completed_at: string | null;
+}
+
+export interface Reminder {
+  id: number;
+  message: string;
+  reminder_time: string;
+  repeat_type: "none" | "daily" | "weekly" | "monthly";
+  triggered: boolean;
+  created_at: string;
+}
+
+export interface CalendarEvent {
+  id: number;
+  title: string;
+  description: string;
+  start_time: string;
+  end_time: string;
+  location: string;
+  notes: string;
+  created_at: string;
+}
+

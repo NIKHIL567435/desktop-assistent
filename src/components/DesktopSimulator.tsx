@@ -2,7 +2,11 @@ import React, { useState, useEffect, useRef } from "react";
 import { VoiceAssistant } from "./VoiceAssistant";
 import { CodeExplorer } from "./CodeExplorer";
 import { SettingsPanel } from "./SettingsPanel";
-import { VoiceSettings, Command } from "../types";
+import { TasksPage } from "./TasksPage";
+import { RemindersPage } from "./RemindersPage";
+import { CalendarPage } from "./CalendarPage";
+import { parseNaturalLanguageDateTime } from "../lib/dateTimeParser";
+import { VoiceSettings, Command, Task, Reminder, CalendarEvent, LogEntry } from "../types";
 import {
   Mic,
   Terminal,
@@ -23,14 +27,564 @@ import {
   Play,
   Cpu,
   Battery,
-  Activity
+  Activity,
+  Bell
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 export const DesktopSimulator: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<"assistant" | "code" | "settings">("assistant");
+  const [activeTab, setActiveTab] = useState<"assistant" | "tasks" | "reminders" | "calendar" | "code" | "settings">("assistant");
   const [systemTime, setSystemTime] = useState<string>("");
   const [windowState, setWindowState] = useState<"normal" | "minimized" | "closed">("normal");
+
+  // Lifted Database States for SQLite Desktop Mockup
+  const [tasks, setTasks] = useState<Task[]>(() => {
+    const cached = localStorage.getItem("voicepilot_tasks");
+    if (cached) return JSON.parse(cached);
+    return [
+      {
+        id: 1,
+        title: "Submit report tomorrow at 6 PM",
+        description: "Submit V3 hardware telemetry indicator audit blocks to director",
+        priority: "high",
+        status: "pending",
+        created_at: new Date(Date.now() - 3600000 * 4).toISOString(),
+        due_date: (() => {
+          const d = new Date();
+          d.setDate(d.getDate() + 1);
+          d.setHours(18, 0, 0, 0);
+          return d.toISOString();
+        })(),
+        completed_at: null
+      },
+      {
+        id: 2,
+        title: "Buy groceries",
+        description: "Standard local list of supplies",
+        priority: "low",
+        status: "pending",
+        created_at: new Date(Date.now() - 3600005 * 20).toISOString(),
+        due_date: (() => {
+          const d = new Date();
+          d.setHours(20, 0, 0, 0);
+          return d.toISOString();
+        })(),
+        completed_at: null
+      },
+      {
+        id: 3,
+        title: "Check local SQLite database bounds",
+        description: "Upgrade database schemas to support production calendar rules",
+        priority: "urgent",
+        status: "completed",
+        created_at: new Date(Date.now() - 3600000 * 25).toISOString(),
+        due_date: new Date(Date.now() - 3600000 * 2).toISOString(),
+        completed_at: new Date(Date.now() - 3600000 * 2).toISOString()
+      }
+    ];
+  });
+
+  const [reminders, setReminders] = useState<Reminder[]>(() => {
+    const cached = localStorage.getItem("voicepilot_reminders");
+    if (cached) return JSON.parse(cached);
+    return [
+      {
+        id: 1,
+        message: "Call John",
+        reminder_time: (() => {
+          const d = new Date();
+          d.setHours(20, 0, 0, 0);
+          return d.toISOString();
+        })(),
+        repeat_type: "none",
+        triggered: false,
+        created_at: new Date(Date.now() - 3600000 * 3).toISOString()
+      },
+      {
+        id: 2,
+        message: "Take medicine",
+        reminder_time: (() => {
+          const d = new Date();
+          d.setHours(19, 0, 0, 0);
+          return d.toISOString();
+        })(),
+        repeat_type: "daily",
+        triggered: false,
+        created_at: new Date(Date.now() - 3600000 * 24).toISOString()
+      }
+    ];
+  });
+
+  const [events, setEvents] = useState<CalendarEvent[]>(() => {
+    const cached = localStorage.getItem("voicepilot_events");
+    if (cached) return JSON.parse(cached);
+    return [
+      {
+        id: 1,
+        title: "Dentist appointment dentist appointment Friday at 10 AM",
+        description: "Routine physical cleaning process",
+        start_time: (() => {
+          const d = new Date();
+          const day = d.getDay();
+          const nextFri = (5 - day + 7) % 7 || 7;
+          d.setDate(d.getDate() + nextFri);
+          d.setHours(10, 0, 0, 0);
+          return d.toISOString();
+        })(),
+        end_time: (() => {
+          const d = new Date();
+          const day = d.getDay();
+          const nextFri = (5 - day + 7) % 7 || 7;
+          d.setDate(d.getDate() + nextFri);
+          d.setHours(11, 0, 0, 0);
+          return d.toISOString();
+        })(),
+        location: "123 Dental Suite Clinic",
+        notes: "Bring insurance card",
+        created_at: new Date(Date.now() - 3600000 * 12).toISOString()
+      },
+      {
+        id: 2,
+        title: "Project Review Meeting with directors",
+        description: "Compile and present active terminal metrics graphs",
+        start_time: (() => {
+          const d = new Date();
+          d.setMinutes(d.getMinutes() + 15); // Trigger alarm alert of 15-min warning!
+          return d.toISOString();
+        })(),
+        end_time: (() => {
+          const d = new Date();
+          d.setHours(d.getHours() + 1);
+          return d.toISOString();
+        })(),
+        location: "Virtual Jitsi Main Room",
+        notes: "Bring slide deck link",
+        created_at: new Date(Date.now() - 3600000 * 8).toISOString()
+      }
+    ];
+  });
+
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const notifiedEventIdsRef = useRef<Set<number>>(new Set());
+  const [activeNotification, setActiveNotification] = useState<{ title: string; message: string } | null>(null);
+
+  // Unified logging function
+  const writeSystemLog = (
+    message: string,
+    type: "info" | "success" | "warning" | "error" | "input" | "output",
+    source: "system" | "voice-in" | "voice-out" | "engine" | "automation"
+  ) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const newEntry: LogEntry = {
+      id: Math.random().toString(),
+      timestamp,
+      type,
+      source,
+      message,
+    };
+    setLogs(prev => [...prev, newEntry]);
+  };
+
+  // Speaks out spoken responses
+  const speakResponse = (text: string) => {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      if (settings.voiceURI) {
+        const voices = window.speechSynthesis.getVoices();
+        const selectedVoice = voices.find(v => v.voiceURI === settings.voiceURI);
+        if (selectedVoice) utterance.voice = selectedVoice;
+      }
+      utterance.rate = settings.rate / 175;
+      utterance.volume = settings.volume;
+      utterance.pitch = settings.pitch;
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  // Show desktop popups & speak notifications
+  const triggerDesktopNotification = (title: string, message: string, voiceAnnounceText: string) => {
+    setActiveNotification({ title, message });
+    speakResponse(voiceAnnounceText);
+    setTimeout(() => {
+      setActiveNotification(null);
+    }, 8000);
+  };
+
+  // Initial console loading logs
+  useEffect(() => {
+    writeSystemLog("VoicePilot subsystem initialized in offline container.", "info", "system");
+    writeSystemLog("Local SQLite database loaded: voicepilot.db (5 schemas loaded).", "success", "system");
+    writeSystemLog("Vosk local voice engine ready: vosk-model-small-en-us-0.15.", "success", "engine");
+  }, []);
+
+  // BG Scheduler Loop
+  useEffect(() => {
+    const schedulerInterval = setInterval(() => {
+      const now = new Date();
+
+      // 1. Monitor Reminders
+      setReminders(prev => {
+        let changed = false;
+        const updated = prev.map(rem => {
+          const remTime = new Date(rem.reminder_time);
+          if (!rem.triggered && remTime <= now) {
+            changed = true;
+            triggerDesktopNotification("Reminder Alert", rem.message, `You have a reminder: ${rem.message}`);
+            writeSystemLog(`[SCHEDULER] Triggered reminder alert: "${rem.message}"`, "success", "system");
+            return { ...rem, triggered: true };
+          }
+          return rem;
+        });
+        if (changed) {
+          localStorage.setItem("voicepilot_reminders", JSON.stringify(updated));
+          return updated;
+        }
+        return prev;
+      });
+
+      // 2. Monitor Calendar Events (15 min check)
+      events.forEach(ev => {
+        const startTime = new Date(ev.start_time);
+        const diffMs = startTime.getTime() - now.getTime();
+        const diffMins = Math.round(diffMs / (60 * 1000));
+
+        if (diffMins === 15 && !notifiedEventIdsRef.current.has(ev.id)) {
+          notifiedEventIdsRef.current.add(ev.id);
+          triggerDesktopNotification(
+            "Upcoming Event",
+            `${ev.title} starting in 15 minutes`,
+            `Your event ${ev.title} starts in 15 minutes`
+          );
+          writeSystemLog(`[SCHEDULER] Pre-event 15 minute timer fired: "${ev.title}"`, "info", "system");
+        }
+      });
+
+      // 3. Monitor Overdue Tasks
+      setTasks(prev => {
+        let changed = false;
+        const updated = prev.map(t => {
+          if (t.status === "pending" && new Date(t.due_date) < now) {
+            changed = true;
+            writeSystemLog(`[SCHEDULER] Marked task #${t.id} ("${t.title}") as Overdue.`, "warning", "system");
+            return { ...t, status: "overdue" as const };
+          }
+          return t;
+        });
+        if (changed) {
+          localStorage.setItem("voicepilot_tasks", JSON.stringify(updated));
+          return updated;
+        }
+        return prev;
+      });
+
+    }, 5000);
+
+    return () => clearInterval(schedulerInterval);
+  }, [events]);
+
+  // Voice Command Productivity matcher
+  const handleProductivityVoiceCommand = (query: string): string | null => {
+    const clean = query.trim().toLowerCase();
+
+    // Add Task Handler
+    if (clean.startsWith("add task ")) {
+      const remaining = query.substring(9).trim();
+      const datePhrases = ["tomorrow at", "next monday at", "next friday at", "friday at", "at ", "every day at", "every monday at", "in "];
+      let titlePart = remaining;
+      let datePart = "";
+
+      for (const phrase of datePhrases) {
+        const index = remaining.toLowerCase().indexOf(phrase);
+        if (index !== -1) {
+          titlePart = remaining.substring(0, index).trim();
+          datePart = remaining.substring(index).trim();
+          break;
+        }
+      }
+
+      if (titlePart.toLowerCase().endsWith(" at")) {
+        titlePart = titlePart.substring(0, titlePart.length - 3).trim();
+      }
+
+      const parsed = parseNaturalLanguageDateTime(datePart || "tomorrow");
+      const newTask: Task = {
+        id: tasks.length > 0 ? Math.max(...tasks.map(t => t.id)) + 1 : 1,
+        title: titlePart || "Voice Task",
+        description: `Scheduled via VoicePilot matching engine coordinate: "${datePart || "tomorrow"}"`,
+        priority: "medium",
+        status: parsed.dateTime < new Date() ? "overdue" : "pending",
+        created_at: new Date().toISOString(),
+        due_date: parsed.dateTime.toISOString(),
+        completed_at: null
+      };
+
+      setTasks(prev => {
+        const updated = [...prev, newTask];
+        localStorage.setItem("voicepilot_tasks", JSON.stringify(updated));
+        return updated;
+      });
+
+      writeSystemLog(`[SQL ENGINE] Executed: INSERT INTO tasks (title, status) VALUES ('${newTask.title}', 'pending');`, "success", "system");
+      return `Task successfully committed: "${newTask.title}" is scheduled for ${parsed.dateTime.toLocaleString()}.`;
+    }
+
+    // Toggle Completed Task Handler
+    if (clean.includes("mark task ") && (clean.includes("as completed") || clean.includes("completed") || clean.includes("as complete") || clean.includes("complete"))) {
+      const match = clean.match(/mark\s+task\s+(\d+)/);
+      if (match) {
+        const id = parseInt(match[1], 10);
+        let taskTitle = "";
+        let found = false;
+
+        setTasks(prev => {
+          const updated = prev.map(t => {
+            if (t.id === id) {
+              found = true;
+              taskTitle = t.title;
+              return { ...t, status: "completed" as const, completed_at: new Date().toISOString() };
+            }
+            return t;
+          });
+          if (found) {
+            localStorage.setItem("voicepilot_tasks", JSON.stringify(updated));
+          }
+          return updated;
+        });
+
+        if (found) {
+          writeSystemLog(`[SQL ENGINE] Executed: UPDATE tasks SET status = 'completed' WHERE id = ${id};`, "success", "system");
+          return `I have updated SQLite registers. Marked task ${id}: "${taskTitle}" as completed.`;
+        } else {
+          return `I could not locate task ${id} in active relational records.`;
+        }
+      }
+    }
+
+    // Delete Task Handler
+    if (clean.startsWith("delete task ")) {
+      const match = clean.match(/delete\s+task\s+(\d+)/);
+      if (match) {
+        const id = parseInt(match[1], 10);
+        let found = false;
+
+        setTasks(prev => {
+          const filtered = prev.filter(t => {
+            if (t.id === id) {
+              found = true;
+              return false;
+            }
+            return true;
+          });
+          if (found) {
+            localStorage.setItem("voicepilot_tasks", JSON.stringify(filtered));
+          }
+          return filtered;
+        });
+
+        if (found) {
+          writeSystemLog(`[SQL ENGINE] Executed: DELETE FROM tasks WHERE id = ${id};`, "warning", "system");
+          return `Successfully purged task ${id} from local indices.`;
+        } else {
+          return `I could not locate task ${id} to remove.`;
+        }
+      }
+    }
+
+    // Show Tasks Handler
+    if (clean.includes("show my tasks") || clean.includes("show tasks") || clean.includes("show pending tasks") || clean.includes("show completed tasks") || clean.includes("show overdue tasks")) {
+      setActiveTab("tasks");
+      if (clean.includes("pending")) {
+        const count = tasks.filter(t => t.status === "pending").length;
+        return `Loading tasks console. You have ${count} pending tasks awaiting action.`;
+      } else if (clean.includes("completed")) {
+        const count = tasks.filter(t => t.status === "completed").length;
+        return `Loading tasks table. There are ${count} completed items in local history.`;
+      } else if (clean.includes("overdue")) {
+        const count = tasks.filter(t => t.status !== "completed" && new Date(t.due_date) < new Date()).length;
+        return `Warning: Opened tasks grid. You have ${count} overdue tasks unresolved.`;
+      }
+      return `Loading tasks dashboard. You have a total of ${tasks.length} tasks registered.`;
+    }
+
+    // Create Reminder Handler
+    if (clean.startsWith("remind me ") || clean.startsWith("create reminder ")) {
+      let subject = query;
+      let reminderMsg = "";
+      let whenPart = "";
+
+      const toIdx = clean.indexOf(" to ");
+      
+      if (clean.startsWith("remind me tomorrow at ") || clean.startsWith("remind me at ") || clean.startsWith("remind me in ")) {
+        if (toIdx !== -1) {
+          whenPart = query.substring(10, toIdx).trim();
+          reminderMsg = query.substring(toIdx + 4).trim();
+        } else {
+          reminderMsg = query.substring(10).trim();
+          whenPart = "in 15 minutes";
+        }
+      } else {
+        const startOfMsg = clean.startsWith("remind me to ") ? 13 : (clean.startsWith("remind me ") ? 10 : 16);
+        const subjectAndDate = query.substring(startOfMsg).trim();
+        const dates = [" at ", " tomorrow", " next friday", " every day", " in "];
+        let splitIdx = -1;
+        for (const d of dates) {
+          const idx = subjectAndDate.toLowerCase().indexOf(d);
+          if (idx !== -1) {
+            splitIdx = idx;
+            break;
+          }
+        }
+
+        if (splitIdx !== -1) {
+          reminderMsg = subjectAndDate.substring(0, splitIdx).trim();
+          whenPart = subjectAndDate.substring(splitIdx).trim();
+        } else {
+          reminderMsg = subjectAndDate;
+          whenPart = "in 15 minutes";
+        }
+      }
+
+      const parsed = parseNaturalLanguageDateTime(whenPart);
+      const newReminder: Reminder = {
+        id: reminders.length > 0 ? Math.max(...reminders.map(r => r.id)) + 1 : 1,
+        message: reminderMsg || "Heuristic voice notification",
+        reminder_time: parsed.dateTime.toISOString(),
+        repeat_type: parsed.repeatType,
+        triggered: false,
+        created_at: new Date().toISOString()
+      };
+
+      setReminders(prev => {
+        const updated = [...prev, newReminder];
+        localStorage.setItem("voicepilot_reminders", JSON.stringify(updated));
+        return updated;
+      });
+
+      writeSystemLog(`[SQL ENGINE] Scheduled: INSERT INTO reminders (msg, trigger_time) VALUES ('${newReminder.message}', '${newReminder.reminder_time}');`, "success", "system");
+      return `Alert successfully registered: "${newReminder.message}" will ring on ${parsed.dateTime.toLocaleString()}${newReminder.repeat_type !== "none" ? ` repeating ${newReminder.repeat_type}` : ""}.`;
+    }
+
+    // List Reminders
+    if (clean === "show reminders") {
+      setActiveTab("reminders");
+      return `Opening Reminders scheduler. You have ${reminders.filter(r => !r.triggered).length} pending thresholds in queue.`;
+    }
+
+    // Delete Reminder
+    if (clean.startsWith("delete reminder ")) {
+      const match = clean.match(/delete\s+reminder\s+(\d+)/);
+      if (match) {
+        const id = parseInt(match[1], 10);
+        let found = false;
+
+        setReminders(prev => {
+          const filtered = prev.filter(r => {
+            if (r.id === id) {
+              found = true;
+              return false;
+            }
+            return true;
+          });
+          if (found) {
+            localStorage.setItem("voicepilot_reminders", JSON.stringify(filtered));
+          }
+          return filtered;
+        });
+
+        if (found) {
+          writeSystemLog(`[SQL ENGINE] Executed: DELETE FROM reminders WHERE id = ${id};`, "warning", "system");
+          return `Purged reminder entry ${id} from cache registers.`;
+        } else {
+          return `No reminder found matching index key ${id}.`;
+        }
+      }
+    }
+
+    // Schedule Event / Calendar Meeting
+    if (clean.startsWith("schedule meeting ") || clean.startsWith("add event ")) {
+      const isMeeting = clean.startsWith("schedule meeting ");
+      const subject = query.substring(isMeeting ? 17 : 10).trim();
+      const timePhrases = [" tomorrow at", " next monday at", " next friday at", " friday at", " at ", " in "];
+      let titlePart = subject;
+      let datePart = "";
+
+      for (const phrase of timePhrases) {
+        const idx = subject.toLowerCase().indexOf(phrase);
+        if (idx !== -1) {
+          titlePart = subject.substring(0, idx).trim();
+          datePart = subject.substring(idx).trim();
+          break;
+        }
+      }
+
+      const parsed = parseNaturalLanguageDateTime(datePart || "tomorrow at 2 PM");
+      const endDateTime = new Date(parsed.dateTime);
+      endDateTime.setHours(endDateTime.getHours() + 1);
+
+      const newEvent: CalendarEvent = {
+        id: events.length > 0 ? Math.max(...events.map(e => e.id)) + 1 : 1,
+        title: titlePart || (isMeeting ? "Scheduled Review" : "Regular Checkpoint"),
+        description: `Asynchronous calendar node mapped via transcript: "${datePart || "tomorrow at"}"`,
+        start_time: parsed.dateTime.toISOString(),
+        end_time: endDateTime.toISOString(),
+        location: isMeeting ? "Local Office conference loop" : "Clinic location",
+        notes: "Coordinated hands-free.",
+        created_at: new Date().toISOString()
+      };
+
+      setEvents(prev => {
+        const updated = [...prev, newEvent];
+        localStorage.setItem("voicepilot_events", JSON.stringify(updated));
+        return updated;
+      });
+
+      writeSystemLog(`[SQL ENGINE] Mapped Event: INSERT INTO calendar_events (title, start) VALUES ('${newEvent.title}', '${newEvent.start_time}');`, "success", "system");
+      return `Calendar entry successful: "${newEvent.title}" on ${parsed.dateTime.toLocaleString()}.`;
+    }
+
+    // Show Calendar List
+    if (clean.includes("show today's calendar") || clean.includes("show this week's schedule") || clean.includes("what events do i have today") || clean.includes("show calendar")) {
+      setActiveTab("calendar");
+      const todayCount = events.filter(e => {
+        const st = new Date(e.start_time);
+        return st.getDate() === new Date().getDate() && st.getMonth() === new Date().getMonth();
+      }).length;
+      return `Loading your Calendar panel. You have ${todayCount} active meetings registered for today.`;
+    }
+
+    // Delete Event Handler
+    if (clean.startsWith("delete event ")) {
+      const match = clean.match(/delete\s+event\s+(\d+)/);
+      if (match) {
+        const id = parseInt(match[1], 10);
+        let found = false;
+
+        setEvents(prev => {
+          const filtered = prev.filter(e => {
+            if (e.id === id) {
+              found = true;
+              return false;
+            }
+            return true;
+          });
+          if (found) {
+            localStorage.setItem("voicepilot_events", JSON.stringify(filtered));
+          }
+          return filtered;
+        });
+
+        if (found) {
+          writeSystemLog(`[SQL ENGINE] Purged: DELETE FROM calendar_events WHERE id = ${id};`, "warning", "system");
+          return `Purged event block ${id} from calendar scheduler indexes.`;
+        } else {
+          return `Could not find event with index key ${id}.`;
+        }
+      }
+    }
+
+    return null;
+  };
 
   // V2 Interactive Desktop states
   const [volume, setVolume] = useState<number>(70); // 0-100%
@@ -412,33 +966,66 @@ export const DesktopSimulator: React.FC = () => {
                     className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-t-md transition duration-200 tracking-wide font-mono ${
                       activeTab === "assistant"
                         ? "bg-[#0a0f1d] border-t-2 border-emerald-500 text-emerald-300 font-semibold"
-                        : "text-slate-400 hover:text-slate-200"
+                        : "text-slate-400 hover:text-slate-205"
                     }`}
                   >
-                    <Mic className="w-3.5 h-3.5 shrink-0" />
-                    Terminal console
+                    <Mic className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+                    Terminal
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("tasks")}
+                    className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-t-md transition duration-200 tracking-wide font-mono ${
+                      activeTab === "tasks"
+                        ? "bg-[#0a0f1d] border-t-2 border-emerald-500 text-emerald-300 font-semibold"
+                        : "text-slate-400 hover:text-slate-205"
+                    }`}
+                  >
+                    <CheckCircle className="w-3.5 h-3.5 shrink-0 text-indigo-400" />
+                    Tasks Page
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("reminders")}
+                    className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-t-md transition duration-200 tracking-wide font-mono ${
+                      activeTab === "reminders"
+                        ? "bg-[#0a0f1d] border-t-2 border-emerald-500 text-emerald-300 font-semibold"
+                        : "text-slate-400 hover:text-slate-205"
+                    }`}
+                  >
+                    <Clock className="w-3.5 h-3.5 shrink-0 text-[#a855f7]" />
+                    Reminders
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("calendar")}
+                    className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-t-md transition duration-200 tracking-wide font-mono ${
+                      activeTab === "calendar"
+                        ? "bg-[#0a0f1d] border-t-2 border-emerald-500 text-emerald-300 font-semibold"
+                        : "text-slate-400 hover:text-slate-205"
+                    }`}
+                  >
+                    <Activity className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                    Calendar Grid
                   </button>
                   <button
                     onClick={() => setActiveTab("code")}
                     className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-t-md transition duration-200 tracking-wide font-mono ${
                       activeTab === "code"
                         ? "bg-[#0a0f1d] border-t-2 border-emerald-500 text-emerald-300 font-semibold"
-                        : "text-slate-400 hover:text-slate-200"
+                        : "text-slate-400 hover:text-slate-205"
                     }`}
                   >
                     <Terminal className="w-3.5 h-3.5 shrink-0" />
-                    Source Code Export
+                    Python Export
                   </button>
                   <button
                     onClick={() => setActiveTab("settings")}
                     className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-t-md transition duration-200 tracking-wide font-mono ${
                       activeTab === "settings"
                         ? "bg-[#0a0f1d] border-t-2 border-emerald-500 text-emerald-300 font-semibold"
-                        : "text-slate-400 hover:text-slate-200"
+                        : "text-slate-400 hover:text-slate-205"
                     }`}
                   >
                     <Settings className="w-3.5 h-3.5 shrink-0" />
-                    Voice settings
+                    Speech Set
                   </button>
                 </div>
 
@@ -474,6 +1061,34 @@ export const DesktopSimulator: React.FC = () => {
                     settings={settings}
                     setSettings={setSettings}
                     onAction={handleAction}
+                    onVoiceCommand={handleProductivityVoiceCommand}
+                    logs={logs}
+                    setLogs={setLogs}
+                    writeSystemLog={writeSystemLog}
+                  />
+                )}
+                {activeTab === "tasks" && (
+                  <TasksPage
+                    tasks={tasks}
+                    setTasks={setTasks}
+                    triggerToast={triggerToast}
+                    writeSystemLog={writeSystemLog}
+                  />
+                )}
+                {activeTab === "reminders" && (
+                  <RemindersPage
+                    reminders={reminders}
+                    setReminders={setReminders}
+                    triggerToast={triggerToast}
+                    writeSystemLog={writeSystemLog}
+                  />
+                )}
+                {activeTab === "calendar" && (
+                  <CalendarPage
+                    events={events}
+                    setEvents={setEvents}
+                    triggerToast={triggerToast}
+                    writeSystemLog={writeSystemLog}
                   />
                 )}
                 {activeTab === "code" && <CodeExplorer />}
@@ -807,6 +1422,41 @@ export const DesktopSimulator: React.FC = () => {
                     >
                       <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                       <span>{toastMessage}</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* F. Scheduled Reminder Alarm Portal Desktop Pop-up */}
+                <AnimatePresence>
+                  {activeNotification && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.8, y: 50 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.8, y: 50 }}
+                      className="absolute bottom-16 right-4 z-50 bg-[#090d16] border border-emerald-500 rounded-lg p-4 shadow-2xl flex items-start gap-3 w-80 backdrop-blur-md"
+                    >
+                      <div className="flex items-center justify-center w-9 h-9 rounded-full bg-emerald-950 border border-emerald-500 shrink-0 text-emerald-450">
+                        <Bell className="w-5 h-5 animate-bounce" />
+                      </div>
+                      <div className="flex-1 min-w-0 font-sans">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-mono font-bold tracking-widest text-[#2cbe7d] uppercase">
+                            {activeNotification.title}
+                          </span>
+                          <button
+                            onClick={() => setActiveNotification(null)}
+                            className="text-slate-500 hover:text-slate-350 p-0.5 cursor-pointer"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                        <h4 className="text-xs font-bold text-slate-100 mt-1.5 leading-snug">
+                          {activeNotification.message}
+                        </h4>
+                        <p className="text-[9px] font-mono text-slate-600 mt-2 flex items-center gap-1 uppercase font-semibold">
+                          <Clock className="w-3.5 h-3.5 text-slate-700" /> offline engine service
+                        </p>
+                      </div>
                     </motion.div>
                   )}
                 </AnimatePresence>

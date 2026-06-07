@@ -70,7 +70,7 @@ export const CodeExplorer: React.FC = () => {
         <div className="flex items-center gap-2 pb-3 mb-1 border-b border-slate-800">
           <Terminal className="w-4 h-4 text-emerald-400" />
           <span className="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono">
-            V1 File Workspace
+            V3 Code Workspace
           </span>
         </div>
 
@@ -90,7 +90,7 @@ export const CodeExplorer: React.FC = () => {
           {/* Virtual Directories structure */}
           <div className="text-[11px] text-slate-500 font-bold px-1 py-1 uppercase tracking-wider flex items-center gap-1">
             <Folder className="w-3.5 h-3.5 text-slate-600" />
-            voicepilot_v1/
+            voicepilot_v3/
           </div>
 
           <div className="pl-3 space-y-1">
@@ -118,11 +118,17 @@ export const CodeExplorer: React.FC = () => {
         <div className="mt-3 p-3 bg-slate-900/60 border border-slate-800/80 rounded-md">
           <div className="flex gap-1.5 text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">
             <Info className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-            V1 Command Scope
+            V3 Command Scope
           </div>
-          <p className="text-[11px] text-slate-400 leading-normal">
-            Pre-registered triggers: <code className="text-emerald-400 bg-emerald-950/20 px-1 py-0.5 rounded font-mono">"hello"</code>, <code className="text-emerald-400 bg-emerald-950/20 px-1 py-0.5 rounded">"what time is it"</code>, <code className="text-emerald-400 bg-emerald-950/20 px-1 py-0.5 rounded">"what date is today"</code>, <code className="text-emerald-400 bg-emerald-950/20 px-1 py-0.5 rounded">"exit assistant"</code>, <code className="text-emerald-400 bg-emerald-950/20 px-1 py-0.5 rounded">"stop listening"</code>.
+          <p className="text-[11px] text-slate-400 leading-normal mb-1.5">
+            VoicePilot includes active hardware telemetry control and localized GUI:
           </p>
+          <div className="text-[10px] text-slate-400 space-y-1 font-mono">
+            <div>• <span className="text-emerald-300">"volume up/down/mute"</span> - Media bindings</div>
+            <div>• <span className="text-emerald-300">"open browser/downloads"</span> - OS subroutines</div>
+            <div>• <span className="text-emerald-300">"cpu/memory/battery/disk"</span> - psutil status</div>
+            <div>• <span className="text-emerald-300">"system shutdown/abort"</span> - OS safe calls</div>
+          </div>
         </div>
       </div>
 
